@@ -1698,14 +1698,8 @@ export default class Matrix extends AbstractMatrix {
       return nRows.clone();
     } else if (Number.isInteger(nRows) && nRows > 0) {
       // Create an empty matrix
-      this.data = [];
       if (Number.isInteger(nColumns) && nColumns > 0) {
-        for (let i = 0; i < nRows; i++) {
-          this.data.push([]);
-          for (let j = 0; j < nColumns; j++) {
-            this.data[i].push(0);
-          }
-        }
+        this.data = new Float64Array(nRows * nColumns);
       } else {
         throw new TypeError('nColumns must be a positive integer');
       }
@@ -1719,12 +1713,14 @@ export default class Matrix extends AbstractMatrix {
           'Data must be a 2D array with at least one element'
         );
       }
-      this.data = [];
+      this.data = new Float64Array(nRows * nColumns);
       for (let i = 0; i < nRows; i++) {
         if (arrayData[i].length !== nColumns) {
           throw new RangeError('Inconsistent array dimensions');
         }
-        this.data.push(arrayData[i].slice());
+        for (let j = 0; j < nColumns; ++j) {
+          this.data[i * nColumns + j] = arrayData[i][j];
+        }
       }
     } else {
       throw new TypeError(
@@ -1737,12 +1733,12 @@ export default class Matrix extends AbstractMatrix {
   }
 
   set(rowIndex, columnIndex, value) {
-    this.data[rowIndex][columnIndex] = value;
+    this.data[rowIndex * this.columns + columnIndex] = value;
     return this;
   }
 
   get(rowIndex, columnIndex) {
-    return this.data[rowIndex][columnIndex];
+    return this.data[rowIndex * this.columns + columnIndex];
   }
 
   /**
@@ -1755,8 +1751,19 @@ export default class Matrix extends AbstractMatrix {
     if (this.rows === 1) {
       throw new RangeError('A matrix cannot have less than one row');
     }
-    this.data.splice(index, 1);
+
+    const newData = new Float64Array(this.columns * (this.rows - 1));
+
+    for (let i = 0, newIndex = 0; i < this.rows; ++i) {
+      if (i === index) {
+        continue;
+      }
+      for (let j = 0; j < this.columns; ++j) {
+        newData[newIndex++] = this.data[i * this.columns + j];
+      }
+    }
     this.rows -= 1;
+    this.data = newData;
     return this;
   }
 
@@ -1773,8 +1780,22 @@ export default class Matrix extends AbstractMatrix {
     }
     checkRowIndex(this, index, true);
     array = checkRowVector(this, array, true);
-    this.data.splice(index, 0, array);
+    const newData = new Float64Array(this.columns * (this.rows + 1));
+
+    for (let i = 0, offset = 0, newIndex = 0; i < (this.rows + 1); ++i) {
+      if (i === index) {
+        for (let j = 0; j < this.columns; ++j) {
+          newData[newIndex++] = array[j];
+        }
+        offset = -1;
+      } else {
+        for (let j = 0; j < this.columns; ++j) {
+          newData[newIndex++] = this.data[(i + offset) * this.columns + j];
+        }
+      }
+    }
     this.rows += 1;
+    this.data = newData;
     return this;
   }
 
@@ -1788,10 +1809,18 @@ export default class Matrix extends AbstractMatrix {
     if (this.columns === 1) {
       throw new RangeError('A matrix cannot have less than one column');
     }
-    for (var i = 0; i < this.rows; i++) {
-      this.data[i].splice(index, 1);
+    const newData = new Float64Array((this.columns - 1) * this.rows);
+
+    for (let i = 0, newIndex = 0; i < this.rows; ++i) {
+      for (let j = 0; j < this.columns; ++j) {
+        if (j === index) {
+          continue;
+        }
+        newData[newIndex++] = this.data[i * this.columns + j];
+      }
     }
     this.columns -= 1;
+    this.data = newData;
     return this;
   }
 
@@ -1808,10 +1837,21 @@ export default class Matrix extends AbstractMatrix {
     }
     checkColumnIndex(this, index, true);
     array = checkColumnVector(this, array);
-    for (var i = 0; i < this.rows; i++) {
-      this.data[i].splice(index, 0, array[i]);
+
+    const newData = new Float64Array((this.columns + 1) * this.rows);
+    for (let i = 0, newIndex = 0; i < this.rows; ++i) {
+      for (let j = 0, offset = 0; j < this.columns + 1; ++j) {
+        if (j === index) {
+          newData[newIndex++] = array[i];
+          offset = -1;
+        } else {
+          newData[newIndex++] = this.data[i * this.columns + j + offset];
+        }
+      }
     }
+
     this.columns += 1;
+    this.data = newData;
     return this;
   }
 }
